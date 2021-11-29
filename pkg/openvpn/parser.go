@@ -18,11 +18,11 @@ type GlobalStats struct {
 
 // Client struct store information from openvpn client statistics
 type Client struct {
-	CommonName     string
 	RealAddress    string
 	BytesReceived  float64
 	BytesSent      float64
 	ConnectedSince time.Time
+	Username       string
 }
 
 // ServerInfo reflects information that was collected about the server
@@ -66,21 +66,13 @@ func ParseFile(statusfile string) (*Status, error) {
 	return status, nil
 }
 
-func parseTime(t string) time.Time {
-	loc, _ := time.LoadLocation("Local")
-	t2, _ := time.ParseInLocation(timefmt, t, loc)
-	return t2
-}
-
 func parseIP(ip string) string {
 	return net.ParseIP(strings.Split(ip, ":")[0]).String()
 }
 
 func parse(reader *bufio.Reader) (*Status, error) {
 	buf, _ := reader.Peek(19)
-	if bytes.HasPrefix(buf, []byte("OpenVPN CLIENT LIST")) {
-		return parseStatusV1(reader)
-	}
+
 	if bytes.HasPrefix(buf, []byte("TITLE,OpenVPN")) {
 		return parseStatusV2AndV3(reader, ",")
 	}
@@ -88,43 +80,6 @@ func parse(reader *bufio.Reader) (*Status, error) {
 		return parseStatusV2AndV3(reader, "\t")
 	}
 	return nil, &parseError{"bad status file"}
-}
-
-func parseStatusV1(reader io.Reader) (*Status, error) {
-	scanner := bufio.NewScanner(reader)
-	var lastUpdatedAt time.Time
-	var maxBcastMcastQueueLen int
-	var clients []Client
-	for scanner.Scan() {
-		fields := strings.Split(scanner.Text(), ",")
-		if fields[0] == "Updated" && len(fields) == 2 {
-			lastUpdatedAt = parseTime(fields[1])
-		} else if fields[0] == "Max bcast/mcast queue length" {
-			i, err := strconv.Atoi(fields[1])
-			if err == nil {
-				maxBcastMcastQueueLen = i
-			}
-		} else if len(fields) == 5 {
-			if fields[0] != "Common Name" {
-				bytesRec, _ := strconv.ParseFloat(fields[2], 64)
-				bytesSent, _ := strconv.ParseFloat(fields[3], 64)
-				client := Client{
-					CommonName:     fields[0],
-					RealAddress:    parseIP(fields[1]),
-					BytesReceived:  bytesRec,
-					BytesSent:      bytesSent,
-					ConnectedSince: parseTime(fields[4]),
-				}
-				clients = append(clients, client)
-			}
-		}
-	}
-	return &Status{
-		GlobalStats: GlobalStats{maxBcastMcastQueueLen},
-		UpdatedAt:   lastUpdatedAt,
-		ClientList:  clients,
-		ServerInfo:  ServerInfo{Version: "unknown", Arch: "unknown", AdditionalInfo: "unknown"},
-	}, nil
 }
 
 func parseStatusV2AndV3(reader io.Reader, separator string) (*Status, error) {
@@ -143,11 +98,11 @@ func parseStatusV2AndV3(reader io.Reader, separator string) (*Status, error) {
 			bytesSent, _ := strconv.ParseFloat(fields[6], 64)
 			connectedSinceInt, _ := strconv.ParseInt(fields[8], 10, 64)
 			client := Client{
-				CommonName:     fields[1],
 				RealAddress:    parseIP(fields[2]),
 				BytesReceived:  bytesRec,
 				BytesSent:      bytesSent,
 				ConnectedSince: time.Unix(connectedSinceInt, 0),
+				Username:       fields[9],
 			}
 			clients = append(clients, client)
 		} else if fields[0] == "GLOBAL_STATS" {

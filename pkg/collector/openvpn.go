@@ -19,6 +19,7 @@ type OpenVPNCollector struct {
 	BytesSent             *prometheus.Desc
 	ConnectedSince        *prometheus.Desc
 	MaxBcastMcastQueueLen *prometheus.Desc
+	Username              *prometheus.Desc
 	ServerInfo            *prometheus.Desc
 	CollectionError       *prometheus.CounterVec
 }
@@ -58,19 +59,25 @@ func NewOpenVPNCollector(logger log.Logger, openVPNServer []OpenVPNServer, colle
 		BytesReceived: prometheus.NewDesc(
 			prometheus.BuildFQName(namespace, "", "bytes_received"),
 			"Amount of data received via the connection",
-			[]string{"server", "common_name"},
+			[]string{"server", "username"},
 			nil,
 		),
 		BytesSent: prometheus.NewDesc(
 			prometheus.BuildFQName(namespace, "", "bytes_sent"),
 			"Amount of data sent via the connection",
-			[]string{"server", "common_name"},
+			[]string{"server", "username"},
+			nil,
+		),
+		Username: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, "", "username"),
+			"Username",
+			[]string{"server", "username"},
 			nil,
 		),
 		ConnectedSince: prometheus.NewDesc(
 			prometheus.BuildFQName(namespace, "", "connected_since"),
 			"Unixtimestamp when the connection was established",
-			[]string{"server", "common_name"},
+			[]string{"server", "username"},
 			nil,
 		),
 		ServerInfo: prometheus.NewDesc(
@@ -99,6 +106,7 @@ func (c *OpenVPNCollector) Describe(ch chan<- *prometheus.Desc) {
 		ch <- c.BytesSent
 		ch <- c.BytesReceived
 		ch <- c.ConnectedSince
+		ch <- c.Username
 	}
 	c.CollectionError.Describe(ch)
 }
@@ -127,44 +135,50 @@ func (c *OpenVPNCollector) collect(ovpn OpenVPNServer, ch chan<- prometheus.Metr
 	}
 
 	connectedClients := 0
-	var clientCommonNames []string
+	var clientUsernames []string
 	for _, client := range status.ClientList {
 		connectedClients++
 		level.Debug(c.logger).Log(
-			"commonName", client.CommonName,
 			"connectedSince", client.ConnectedSince.Unix(),
 			"bytesReceived", client.BytesReceived,
 			"bytesSent", client.BytesSent,
+			"Username", client.Username,
 		)
 		if c.collectClientMetrics {
-			if client.CommonName == "UNDEF" {
+			if client.Username == "UNDEF" {
 				continue
 			}
-			if contains(clientCommonNames, client.CommonName) {
+			if contains(clientUsernames, client.Username) {
 				level.Warn(c.logger).Log(
 					"msg", "duplicate client common name in statusfile - duplicate metric dropped",
-					"commonName", client.CommonName,
+					"username", client.Username,
 				)
 				continue
 			}
-			clientCommonNames = append(clientCommonNames, client.CommonName)
+			clientUsernames = append(clientUsernames, client.Username)
 			ch <- prometheus.MustNewConstMetric(
 				c.BytesReceived,
 				prometheus.GaugeValue,
 				client.BytesReceived,
-				ovpn.Name, client.CommonName,
+				ovpn.Name, client.Username,
 			)
 			ch <- prometheus.MustNewConstMetric(
 				c.BytesSent,
 				prometheus.GaugeValue,
 				client.BytesSent,
-				ovpn.Name, client.CommonName,
+				ovpn.Name, client.Username,
 			)
 			ch <- prometheus.MustNewConstMetric(
 				c.ConnectedSince,
 				prometheus.GaugeValue,
 				float64(client.ConnectedSince.Unix()),
-				ovpn.Name, client.CommonName,
+				ovpn.Name, client.Username,
+			)
+			ch <- prometheus.MustNewConstMetric(
+				c.Username,
+				prometheus.GaugeValue,
+				1.0,
+				ovpn.Name, client.Username,
 			)
 		}
 	}
