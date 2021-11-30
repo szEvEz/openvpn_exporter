@@ -59,19 +59,19 @@ func NewOpenVPNCollector(logger log.Logger, openVPNServer []OpenVPNServer, colle
 		BytesReceived: prometheus.NewDesc(
 			prometheus.BuildFQName(namespace, "", "bytes_received"),
 			"Amount of data received via the connection",
-			[]string{"server", "username"},
+			[]string{"server", "username", "realAddress", "virtualAddress"},
 			nil,
 		),
 		BytesSent: prometheus.NewDesc(
 			prometheus.BuildFQName(namespace, "", "bytes_sent"),
 			"Amount of data sent via the connection",
-			[]string{"server", "username"},
+			[]string{"server", "username", "realAddress", "virtualAddress"},
 			nil,
 		),
 		Username: prometheus.NewDesc(
 			prometheus.BuildFQName(namespace, "", "username"),
 			"Username",
-			[]string{"server", "username"},
+			[]string{"server", "username", "realAddress", "virtualAddress"},
 			nil,
 		),
 		ConnectedSince: prometheus.NewDesc(
@@ -142,7 +142,9 @@ func (c *OpenVPNCollector) collect(ovpn OpenVPNServer, ch chan<- prometheus.Metr
 			"connectedSince", client.ConnectedSince.Unix(),
 			"bytesReceived", client.BytesReceived,
 			"bytesSent", client.BytesSent,
-			"Username", client.Username,
+			"username", client.Username,
+			"realAddress", client.RealAddress,
+			"virtualAddress", client.VirtualAddress,
 		)
 		if c.collectClientMetrics {
 			if client.Username == "UNDEF" {
@@ -160,13 +162,13 @@ func (c *OpenVPNCollector) collect(ovpn OpenVPNServer, ch chan<- prometheus.Metr
 				c.BytesReceived,
 				prometheus.GaugeValue,
 				client.BytesReceived,
-				ovpn.Name, client.Username,
+				ovpn.Name, client.Username, client.RealAddress, client.VirtualAddress,
 			)
 			ch <- prometheus.MustNewConstMetric(
 				c.BytesSent,
 				prometheus.GaugeValue,
 				client.BytesSent,
-				ovpn.Name, client.Username,
+				ovpn.Name, client.Username, client.RealAddress, client.VirtualAddress,
 			)
 			ch <- prometheus.MustNewConstMetric(
 				c.ConnectedSince,
@@ -178,7 +180,7 @@ func (c *OpenVPNCollector) collect(ovpn OpenVPNServer, ch chan<- prometheus.Metr
 				c.Username,
 				prometheus.GaugeValue,
 				1.0,
-				ovpn.Name, client.Username,
+				ovpn.Name, client.Username, client.RealAddress, client.VirtualAddress,
 			)
 		}
 	}

@@ -4,7 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"io"
-	"net"
+	// "net"
 	"os"
 	"strconv"
 	"strings"
@@ -19,6 +19,7 @@ type GlobalStats struct {
 // Client struct store information from openvpn client statistics
 type Client struct {
 	RealAddress    string
+	VirtualAddress string
 	BytesReceived  float64
 	BytesSent      float64
 	ConnectedSince time.Time
@@ -66,9 +67,9 @@ func ParseFile(statusfile string) (*Status, error) {
 	return status, nil
 }
 
-func parseIP(ip string) string {
-	return net.ParseIP(strings.Split(ip, ":")[0]).String()
-}
+// func parseIP(ip string) string {
+// 	return net.ParseIP(strings.Split(ip, ":")[0]).String()
+// }
 
 func parse(reader *bufio.Reader) (*Status, error) {
 	buf, _ := reader.Peek(19)
@@ -98,7 +99,8 @@ func parseStatusV2AndV3(reader io.Reader, separator string) (*Status, error) {
 			bytesSent, _ := strconv.ParseFloat(fields[6], 64)
 			connectedSinceInt, _ := strconv.ParseInt(fields[8], 10, 64)
 			client := Client{
-				RealAddress:    parseIP(fields[2]),
+				RealAddress:    fields[2],
+				VirtualAddress: fields[3],
 				BytesReceived:  bytesRec,
 				BytesSent:      bytesSent,
 				ConnectedSince: time.Unix(connectedSinceInt, 0),
